@@ -1,32 +1,36 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Button, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
 import 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import data from './assets/data.json';
+// import data from './assets/data.json';
 import { BarCodeScanner } from 'expo-barcode-scanner';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const enumData = 'DATA_SCANED';
 
 function ScanQR() {
   const [hasPermission, setHasPermission] = useState(null);
-  const [scanned, setScanned] = useState(false);
+  const [scanned, setScanned] = useState(null);
   const [showModal, setShowModal] = useState({ isShow: false, info: null });
   useEffect(() => {
-    const getBarCodeScannerPermissions = async () => {
+    (async () => {
       const { status } = await BarCodeScanner.requestPermissionsAsync();
       setHasPermission(status === 'granted');
-    };
-
-    getBarCodeScannerPermissions();
+    })();
   }, []);
 
   const handleBarCodeScanned = ({ type, data }) => {
     setScanned(true);
-    // alert(`${data}`);
-    // console.log(data)
 
-    setShowModal({ isShow: true, info: data });
+    if (data && typeof (data) === 'string') {
+      setShowModal({ isShow: true, info: data });
+    }
+    else {
+      alert('Dữ liệu không hợp lệ');
+    }
   };
 
   const renderInfo = (data) => {
@@ -46,12 +50,36 @@ function ScanQR() {
     }
   }
 
+  const saveData = async (info) => {
+    const data = await AsyncStorage.getItem(enumData);
+    let result = [];
+
+    if (data) {
+      const toJson = JSON.parse(data);
+
+      //tra tien moi mo ra
+      if (toJson.length < 10) {
+        result = [info, ...toJson];
+      }
+    }
+    else {
+      result = [info];
+    }
+
+    await AsyncStorage.setItem(enumData, JSON.stringify(result));
+
+    alert('Đã lưu')
+
+    setShowModal({ isShow: false, info: null });
+  }
+
   if (hasPermission === null) {
     return <Text>Requesting for camera permission</Text>;
   }
-  if (hasPermission === false) {
+  else if (hasPermission === false) {
     return <Text>No access to camera</Text>;
   }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       {showModal.isShow ? (
@@ -82,10 +110,9 @@ function ScanQR() {
             }}>
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Đóng</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setScanned(true)} style={{
+            <TouchableOpacity onPress={() => saveData(showModal.info)} style={{
               backgroundColor: '#0971dc',
               padding: 20,
-              // width: 300,
               flex: 2,
               margin: 5,
               alignSelf: 'center',
@@ -94,7 +121,7 @@ function ScanQR() {
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Lưu</Text>
             </TouchableOpacity>
           </View>
-        </View>) : (<View style={{ flex: 1 }}>{!scanned && (<View style={{ flex: 1 }}>
+        </View>) : (<View style={{ flex: 1 }}>{scanned == false && (<View style={{ flex: 1 }}>
           <View style={{ flex: 1 }}>
             <BarCodeScanner
               onBarCodeScanned={handleBarCodeScanned}
@@ -116,9 +143,8 @@ function ScanQR() {
           </TouchableOpacity>
         </View>)}
 
-          {scanned && <TouchableOpacity onPress={() => setScanned(false)} style={{
+          {(scanned || scanned === null) && <TouchableOpacity onPress={() => setScanned(false)} style={{
             alignItems: 'center',
-
             flex: 1, flexDirection: 'row', alignContent: 'center', alignSelf: 'center'
           }}>
             <Text style={{
@@ -131,9 +157,47 @@ function ScanQR() {
   )
 }
 
-function ListData() {
-  console.log(data)
-  return <Text>Danh sách</Text>
+function ListData({ navigation }) {
+  const [dataScan, setDataScan] = useState([]);
+  // console.log(navigation.isFocused(), 'dataddd11');
+
+  useEffect(() => {
+    (async () => {
+      const data = await AsyncStorage.getItem(enumData);
+
+      if (data) {
+        setDataScan(JSON.parse(data));
+      }
+    })();
+  }, []);
+
+  const renderData = () => {
+    console.log(dataScan, 'datadatadata');
+
+    return dataScan.map((item, i) => {
+      const splitItem = item.split('|');
+      return (<View key={i} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: 'gray', flexDirection: 'row' }}>
+        <Text style={{
+          // flex: 1,
+          alignSelf: 'center',
+          fontWeight: 'bold'
+          // alignContent: 'center',
+          // flexDirection: 'column'
+        }}>{++i}</Text>
+        <View>
+          {splitItem ? splitItem.map((text, j) => {
+            return <Text style={{ paddingLeft: 20, fontSize: 15, color: '#2b2a2a', padding: 5 }} key={j}>{text}</Text>
+          }) : <View><Text>{item}</Text></View>}
+        </View>
+      </View>)
+    })
+  }
+
+  return (<View style={{ flex: 1 }}>
+    <ScrollView>
+      {renderData()}
+    </ScrollView>
+  </View>)
 }
 
 const Tab = createBottomTabNavigator();
@@ -160,6 +224,7 @@ export default function App() {
           )
         }}></Tab.Screen>
         <Tab.Screen name='Danh sách' component={ListData} options={{
+          unmountOnBlur: true,
           tabBarLabel: ({ focused }) => {
             return <Text style={[{ fontSize: 15, fontWeight: '300', color: '#2b2a2a' }, focused && { fontWeight: 'bold' }]}>Danh sách</Text>
           },
